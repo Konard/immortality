@@ -6,7 +6,7 @@ Draft plan for immortality
 ### Electromagnetic levitation
 https://youtu.be/y-Tp5oswnNA
 
-### Acustic levitation
+### Acoustic Levitation
 https://youtu.be/VjfqYoA7rwY
 
 ### Atomic 3D printer
