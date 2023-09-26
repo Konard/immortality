@@ -19,7 +19,7 @@ https://youtu.be/oSCX78-8-q0
 
 ## Target
 
-### Real telekines
+### Real telekinesis
 
 ### Real telepathy
 
