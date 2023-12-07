@@ -12,6 +12,9 @@ https://youtu.be/VjfqYoA7rwY
 ### Phased array antenna
 https://youtu.be/qs2QcycggWU
 
+### Atomic 3D scanner
+https://youtu.be/9DnnxvS6BBQ
+
 ### Atomic 3D printer
 https://youtu.be/oSCX78-8-q0
 
