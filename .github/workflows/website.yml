@@ -1,0 +1,119 @@
+name: Website
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'app/**'
+      - '.github/workflows/website.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+      - '.github/workflows/website.yml'
+  schedule:
+    # Monthly redeploy so the dashboard picks up fresh OWID data.
+    - cron: '0 6 1 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test & typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-test
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix app
+
+      - name: Unit tests
+        run: npm test --prefix app
+
+      - name: Typecheck
+        run: npm run typecheck --prefix app
+
+  build:
+    name: Build site
+    needs: [test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-build
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix app
+
+      - name: Refresh OWID data snapshot
+        # Best effort: on OWID outage the committed snapshot is used instead.
+        continue-on-error: true
+        run: npm run fetch-data --prefix app
+
+      - name: Build
+        run: npm run build --prefix app
+        env:
+          GITHUB_PAGES: ${{ github.event_name != 'pull_request' && 'true' || 'false' }}
+
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-dist
+          path: app/dist
+          if-no-files-found: error
+
+      - name: Upload GitHub Pages artifact
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: app/dist
+
+  # Requires Settings → Pages → Source = GitHub Actions (configure-pages
+  # attempts to enable it automatically on first run).
+  deploy:
+    name: Deploy GitHub Pages
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: pages-deploy-${{ github.repository }}
+      cancel-in-progress: false
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+        with:
+          enablement: true
+
+      - name: Deploy Pages artifact
+        id: deployment
+        uses: actions/deploy-pages@v5
