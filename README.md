@@ -21,6 +21,19 @@ sounds, built and deployed to GitHub Pages by
 [GitHub Actions](.github/workflows/website.yml). The OWID data snapshot is
 refreshed automatically on every deployment.
 
+The **Settings** control makes the experience reversible without changing the
+data display: choose the original mission-teal palette or three alternatives,
+switch among stars, two grids, a galaxy, planet/star orbits, and asteroids,
+disable motion, or map a different synthesized sound to each interaction.
+Sound and animation are enabled by default; browser autoplay rules mean audio
+begins after the first interaction. Preferences are stored locally in the
+browser, and **Restore defaults** returns to the original colors and starfield.
+The animated interface is inspired by [glitchy.website](https://glitchy.website/),
+with direct links to the reference and the open-source Arwes bleep system in the
+settings panel.
+
+![Configurable display and audio settings](docs/screenshots/settings-customization.png?raw=true)
+
 ## Source
 
 ### Electromagnetic levitation

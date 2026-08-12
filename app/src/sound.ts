@@ -1,10 +1,12 @@
-// Interactive UI bleeps synthesized with the Web Audio API — no audio assets.
-// Inspired by the Arwes framework's "bleeps" system. Sound is opt-in: the
-// AudioContext is only created after a user gesture (browser autoplay policy),
-// and every bleep is gated on the enabled flag.
+import { DEFAULT_SETTINGS, type SoundEffects, type SoundPresetId } from './settings';
+
+// Interactive UI bleeps synthesized with the Web Audio API — no audio assets,
+// tracking, or third-party requests. Audio is enabled by default, but the
+// AudioContext remains lazy so browser autoplay policies are respected.
 
 let ctx: AudioContext | null = null;
-let enabled = false;
+let enabled = DEFAULT_SETTINGS.sound;
+let effects: SoundEffects = { ...DEFAULT_SETTINGS.effects };
 
 function context(): AudioContext | null {
   if (typeof AudioContext === 'undefined') return null;
@@ -21,10 +23,27 @@ interface BleepSpec {
   gain: number;
 }
 
-function bleep(spec: BleepSpec): void {
+const PRESET_SPECS: Record<SoundPresetId, BleepSpec | null> = {
+  spark: { type: 'sine', from: 1400, to: 1250, duration: 0.045, gain: 0.015 },
+  confirm: { type: 'square', from: 880, to: 590, duration: 0.09, gain: 0.03 },
+  transmit: { type: 'triangle', from: 440, to: 1180, duration: 0.16, gain: 0.04 },
+  scanner: { type: 'sine', from: 980, to: 940, duration: 0.025, gain: 0.008 },
+  soft: { type: 'sine', from: 520, to: 420, duration: 0.08, gain: 0.018 },
+  pulse: { type: 'sine', from: 220, to: 440, duration: 0.14, gain: 0.025 },
+  silent: null,
+};
+
+function bleep(preset: SoundPresetId): void {
   if (!enabled) return;
+  const spec = PRESET_SPECS[preset];
+  if (!spec) return;
   const audio = context();
   if (!audio) return;
+  if (audio.state === 'suspended') {
+    void audio.resume().catch(() => {
+      // A later user gesture will retry if this interaction was not eligible.
+    });
+  }
   const now = audio.currentTime;
   const osc = audio.createOscillator();
   const amp = audio.createGain();
@@ -40,32 +59,31 @@ function bleep(spec: BleepSpec): void {
 }
 
 export const sounds = {
+  configure(soundEnabled: boolean, soundEffects: SoundEffects): void {
+    enabled = soundEnabled;
+    effects = { ...soundEffects };
+  },
   setEnabled(value: boolean): void {
     enabled = value;
-    if (value) {
-      context();
-      // Confirmation sweep so the toggle is immediately audible.
-      bleep({ type: 'sine', from: 320, to: 960, duration: 0.22, gain: 0.06 });
-    }
+    if (value) bleep('transmit');
   },
   isEnabled(): boolean {
     return enabled;
   },
-  /** Soft high tick for hovering interactive elements. */
+  preview(preset: SoundPresetId): void {
+    bleep(preset);
+  },
   hover(): void {
-    bleep({ type: 'sine', from: 1400, to: 1250, duration: 0.045, gain: 0.015 });
+    bleep(effects.hover);
   },
-  /** Confident blip for clicks and selections. */
   click(): void {
-    bleep({ type: 'square', from: 880, to: 590, duration: 0.09, gain: 0.03 });
+    bleep(effects.activate);
   },
-  /** Rising sweep for switching the observed entity. */
   select(): void {
-    bleep({ type: 'triangle', from: 440, to: 1180, duration: 0.16, gain: 0.04 });
+    bleep(effects.select);
   },
-  /** Low scanning tick for chart crosshair movement (very quiet, throttled). */
   scan(): void {
-    bleep({ type: 'sine', from: 980, to: 940, duration: 0.025, gain: 0.008 });
+    bleep(effects.scan);
   },
 };
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   acceleration,
   assessLev,
@@ -15,17 +15,41 @@ import { Gauge } from './components/Gauge';
 import { StatTile } from './components/StatTile';
 import { LineChart } from './components/LineChart';
 import { DataTable } from './components/DataTable';
+import { SettingsPanel } from './components/SettingsPanel';
+import {
+  DEFAULT_SETTINGS,
+  SETTINGS_STORAGE_KEY,
+  parseStoredSettings,
+  type UiSettings,
+} from './settings';
 
 const SMOOTH_WINDOW = 10;
 
 const inRange = (points: Point[], fromYear: number) => points.filter((p) => p.year >= fromYear);
+
+const initialSettings = (): UiSettings => {
+  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+  try {
+    return parseStoredSettings(window.localStorage.getItem(SETTINGS_STORAGE_KEY));
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+};
 
 export default function App() {
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [entity, setEntity] = useState('World');
   const [rangeId, setRangeId] = useState('all');
-  const [soundOn, setSoundOn] = useState(false);
+  const [uiSettings, setUiSettings] = useState<UiSettings>(initialSettings);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsButtonRef = useRef<HTMLButtonElement>(null);
+
+  const closeSettings = useCallback(() => {
+    setSettingsOpen(false);
+    sounds.click();
+    requestAnimationFrame(() => settingsButtonRef.current?.focus());
+  }, []);
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}data/life-expectancy.json`)
@@ -36,6 +60,15 @@ export default function App() {
       .then(setSnapshot)
       .catch((error: unknown) => setLoadError(String(error)));
   }, []);
+
+  useEffect(() => {
+    sounds.configure(uiSettings.sound, uiSettings.effects);
+    try {
+      window.localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(uiSettings));
+    } catch {
+      // Storage may be disabled; settings still work for this session.
+    }
+  }, [uiSettings]);
 
   const analysis = useMemo(() => {
     if (!snapshot) return null;
@@ -49,16 +82,32 @@ export default function App() {
 
   if (loadError) {
     return (
-      <div className="layout">
-        <p className="load-error">Data link failure — {loadError}</p>
+      <div
+        className={uiSettings.animations ? 'app-shell' : 'app-shell motion-off'}
+        data-palette={uiSettings.palette}
+      >
+        <Starfield mode={uiSettings.background} animated={uiSettings.animations} />
+        <div className="layout">
+          <p className="load-error">Data link failure — {loadError}</p>
+        </div>
       </div>
     );
   }
   if (!snapshot || !analysis) {
     return (
-      <div className="layout">
-        <Starfield />
-        <p className="loading">Establishing data link…</p>
+      <div
+        className={uiSettings.animations ? 'app-shell' : 'app-shell motion-off'}
+        data-palette={uiSettings.palette}
+      >
+        <Starfield mode={uiSettings.background} animated={uiSettings.animations} />
+        <div className="layout loading-layout">
+          <div className="loading" role="status">
+            <span className="busy-indicator" aria-hidden="true">
+              <span />
+            </span>
+            Establishing data link…
+          </div>
+        </div>
       </div>
     );
   }
@@ -70,29 +119,48 @@ export default function App() {
   const latest = series[series.length - 1];
 
   const toggleSound = () => {
-    const next = !soundOn;
-    setSoundOn(next);
+    const next = !uiSettings.sound;
+    setUiSettings({ ...uiSettings, sound: next });
     sounds.setEnabled(next);
   };
 
   return (
-    <>
-      <Starfield />
+    <div
+      className={uiSettings.animations ? 'app-shell' : 'app-shell motion-off'}
+      data-palette={uiSettings.palette}
+    >
+      <Starfield mode={uiSettings.background} animated={uiSettings.animations} />
       <div className="layout">
         <header className="masthead">
           <div>
             <h1>Immortality</h1>
             <p className="subtitle">Longevity escape velocity monitor · mission year {latestYear}</p>
           </div>
-          <button
-            type="button"
-            className="sound-toggle"
-            aria-pressed={soundOn}
-            onPointerEnter={() => sounds.hover()}
-            onClick={toggleSound}
-          >
-            {soundOn ? '♪ Sound on' : '♪ Sound off'}
-          </button>
+          <div className="header-actions">
+            <button
+              type="button"
+              className="sound-toggle"
+              aria-pressed={uiSettings.sound}
+              onPointerEnter={() => sounds.hover()}
+              onClick={toggleSound}
+            >
+              {uiSettings.sound ? '♪ Sound on' : '♪ Sound off'}
+            </button>
+            <button
+              ref={settingsButtonRef}
+              type="button"
+              className="settings-button"
+              aria-haspopup="dialog"
+              aria-expanded={settingsOpen}
+              onPointerEnter={() => sounds.hover()}
+              onClick={() => {
+                setSettingsOpen(true);
+                sounds.click();
+              }}
+            >
+              ⚙ Settings
+            </button>
+          </div>
         </header>
 
         {/* One filter row scoping everything below it */}
@@ -288,11 +356,22 @@ export default function App() {
           <p>
             Data: <a href="https://ourworldindata.org/life-expectancy">Our World in Data</a> ·
             Source code: <a href="https://github.com/konard/immortality">konard/immortality</a> · UI
-            inspired by <a href="https://arwes.dev">Arwes</a> and{' '}
+            inspired by <a href="https://glitchy.website/">glitchy.website</a>,{' '}
+            <a href="https://arwes.dev">Arwes</a> and{' '}
             <a href="https://github.com/educlopez/thegridcn-ui">thegridcn-ui</a>
           </p>
         </footer>
       </div>
-    </>
+      <SettingsPanel
+        open={settingsOpen}
+        settings={uiSettings}
+        onChange={setUiSettings}
+        onClose={closeSettings}
+        onReset={() => {
+          setUiSettings(DEFAULT_SETTINGS);
+          sounds.select();
+        }}
+      />
+    </div>
   );
 }
